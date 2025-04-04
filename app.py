@@ -82,7 +82,7 @@ def fetch_playlist():
                         'thumbnail': entry['thumbnails'][0]['url'] if entry.get('thumbnails') else '',
                         'url': entry.get('webpage_url', '')
                     })
-                except Exception as e:
+                except Exception:
                     skipped += 1
 
         return jsonify({'entries': entries, 'skipped': skipped})
@@ -97,7 +97,7 @@ def download_video():
         return jsonify({'error': 'Missing URL in request'}), 400
 
     video_url = request.json['url']
-    quality = request.json.get('quality', 'bestvideo+bestaudio/best')
+    quality = request.json.get('quality', 'best')
     resolution = request.json.get('resolution', None)
 
     ydl_opts = {
@@ -140,5 +140,4 @@ def set_cookies():
     return jsonify({'success': True, 'message': 'Cookies file uploaded successfully'})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # Render assigns this PORT
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
