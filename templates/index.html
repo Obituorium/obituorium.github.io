@@ -83,19 +83,6 @@
                 transform: rotate(360deg);
             }
         }
-
-        .ad-space {
-            margin: 2rem auto;
-            padding: 1rem;
-            background: #ffffff;
-            border: 1px dashed #ccc;
-            width: 300px;
-            height: 250px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #888;
-        }
     </style>
 </head>
 <body>
@@ -107,8 +94,9 @@
     <button onclick="uploadCookies()">Upload Cookies</button>
 
     <div class="ad-space">
-        <script async data-cfasync="false" src="https://up.propelcdn.com/9154672.js"></script>
+        <script>(function (d, z, s) { s.src = 'https://' + d + '/401/' + z; try { (document.body || document.documentElement).appendChild(s) } catch (e) { } })('gizokraijaw.net', 9154671, document.createElement('script'))</script>
     </div>
+
 
     <div id="loading-spinner">
         <div class="spinner"></div>
@@ -124,9 +112,8 @@
             <label for="format">Format:</label>
             <select id="format">
                 <option value="">Default (Best)</option>
-                <option value="bestaudio">Audio Only</option>
-                <option value="bestvideo">Video Only</option>
-                <option value="bestvideo+bestaudio">Best Video + Audio</option>
+                <option value="bestaudio/best">Audio Only</option>
+                <option value="best">Video</option>
             </select>
 
             <label for="resolution">Quality:</label>
@@ -150,9 +137,8 @@
             <label for="playlist-format">Format:</label>
             <select id="playlist-format">
                 <option value="">Default (Best)</option>
-                <option value="bestaudio">Audio Only</option>
-                <option value="bestvideo">Video Only</option>
-                <option value="bestvideo+bestaudio">Best Video + Audio</option>
+                <option value="bestaudio/best">Audio Only</option>
+                <option value="best">Video</option>
             </select>
 
             <label for="playlist-resolution">Quality:</label>
@@ -175,12 +161,200 @@
         <div id="progress-bar"></div>
     </div>
 
-    <footer>
-        <p> No cookies. No drama. Only downloads.</p>
-    </footer>
-
     <script>
-                // Existing scripts for download and playlist functions here (I'll place them in next step)
+        function showLoadingSpinner(show) {
+            document.getElementById('loading-spinner').style.display = show ? 'block' : 'none';
+        }
+
+        function toggleButtons(disabled) {
+            document.getElementById('download-single-btn') ?.classList.toggle('hidden', disabled);
+            document.getElementById('download-playlist-btn') ?.classList.toggle('hidden', disabled);
+        }
+
+        function checkUrl() {
+            const url = document.getElementById('url').value;
+            if (!url) return;
+
+            showLoadingSpinner(true);
+            toggleButtons(true);
+
+            if (url.includes('list=')) {
+                fetchPlaylist(url);
+            } else {
+                fetchMetadata(url);
+            }
+        }
+
+        function fetchMetadata(videoUrl) {
+            fetch('/fetch_metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: videoUrl })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    showLoadingSpinner(false);
+                    toggleButtons(false);
+                    if (data.error) return alert('Error: ' + data.error);
+
+                    document.getElementById('video-info').classList.remove('hidden');
+                    document.getElementById('playlist-container').classList.add('hidden');
+
+                    document.getElementById('video-title').innerText = data.title;
+                    document.getElementById('thumbnail').src = data.thumbnail;
+                    let minutes = Math.floor(data.duration / 60);
+                    let seconds = data.duration % 60;
+                    document.getElementById('video-duration').innerText = 'Duration: ' + minutes + ' min ' + seconds + ' sec';
+                });
+        }
+
+        function fetchPlaylist(playlistUrl) {
+            fetch('/fetch_playlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: playlistUrl })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    showLoadingSpinner(false);
+                    toggleButtons(false);
+                    if (data.error) return alert('Error: ' + data.error);
+
+                    document.getElementById('playlist-container').classList.remove('hidden');
+                    document.getElementById('video-info').classList.add('hidden');
+
+                    const box = document.getElementById('playlist-box');
+                    box.innerHTML = '';
+
+                    data.entries.forEach((video, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'playlist-item';
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = true;
+                        checkbox.dataset.url = video.url;
+
+                        const img = document.createElement('img');
+                        img.src = video.thumbnail;
+
+                        const details = document.createElement('div');
+                        details.className = 'playlist-details';
+                        details.innerHTML = `<strong>${video.title}</strong><br>Duration: ${Math.floor(video.duration / 60)} min ${video.duration % 60} sec`;
+
+                        div.appendChild(checkbox);
+                        div.appendChild(img);
+                        div.appendChild(details);
+                        box.appendChild(div);
+                    });
+
+                    if (data.skipped > 0) {
+                        alert(data.skipped + ' video(s) were skipped because they were private or unavailable.');
+                    }
+                });
+        }
+
+        function downloadVideo() {
+            let videoUrl = document.getElementById('url').value;
+            let format = document.getElementById('format').value;
+            let resolution = document.getElementById('resolution').value;
+
+            showLoadingSpinner(true);
+            toggleButtons(true);
+
+            fetch('/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: videoUrl,
+                    quality: format || 'bestvideo+bestaudio/best',
+                    resolution: resolution || null
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    showLoadingSpinner(false);
+                    toggleButtons(false);
+                    if (data.success) {
+                        const a = document.createElement('a');
+                        a.href = data.download_link;
+                        a.download = '';
+                        a.style.display = 'none';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                });
+        }
+
+        function downloadSelectedVideos() {
+            const selected = Array.from(document.querySelectorAll('#playlist-box input[type="checkbox"]:checked'));
+            const format = document.getElementById('playlist-format').value;
+            const resolution = document.getElementById('playlist-resolution').value;
+
+            showLoadingSpinner(true);
+            toggleButtons(true);
+
+            let completed = 0;
+            let failed = 0;
+
+            selected.forEach(cb => {
+                fetch('/download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: cb.dataset.url,
+                        quality: format || 'bestvideo+bestaudio/best',
+                        resolution: resolution || null
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            const a = document.createElement('a');
+                            a.href = data.download_link;
+                            a.download = '';
+                            a.style.display = 'none';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        } else {
+                            failed++;
+                            console.error('Download failed:', data.error);
+                        }
+                    })
+                    .finally(() => {
+                        completed++;
+                        if (completed === selected.length) {
+                            showLoadingSpinner(false);
+                            toggleButtons(false);
+                            if (failed > 0) {
+                                alert(`${failed} download(s) failed. Check the console for details.`);
+                            }
+                        }
+                    });
+            });
+        }
+
+        function uploadCookies() {
+            let fileInput = document.getElementById('cookies');
+            let file = fileInput.files[0];
+            if (!file) return alert('Please select a cookies file first!');
+
+            let formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/set_cookies', {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.success ? 'Cookies uploaded successfully!' : 'Error: ' + data.error);
+                });
+        }
     </script>
 </body>
 </html>
